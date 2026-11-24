@@ -42,6 +42,7 @@ bunfig,,bunfig.toml
 codedb,,codedb.snapshot
 docker-compose,,docker-compose.yml
 ,Docs,docs/
+code-review-2026-11-24,Critical fixes,docs/code-review-2026-11-24.md
 database,Distributed Seat Reservation System — Database Specification,docs/database.md
 deployment,Distributed Seat Reservation System — Deployment Guide,docs/deployment.md
 development,Distributed Seat Reservation System — Developer Guide,docs/development.md
@@ -102,6 +103,7 @@ validation-test,TypeScript module: validation-test.,packages/api/tests/validatio
 ,Src,packages/be-core/src/
 auth-middleware,JWT authentication middleware for Elysia.,packages/be-core/src/auth-middleware.ts
 config,Zod-based environment configuration with required/optional var handling.,packages/be-core/src/config.ts
+csrf,CSRF protection using the Signed Double-Submit Cookie pattern.,packages/be-core/src/csrf.ts
 database,PostgreSQL database connection pool using pg (node-postgres).,packages/be-core/src/database.ts
 health,Health check Elysia plugin providing /health/live and /health/ready endpoints.,packages/be-core/src/health.ts
 index,@bed-stack/be-core,packages/be-core/src/index.ts
