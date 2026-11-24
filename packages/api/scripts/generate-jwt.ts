@@ -68,7 +68,7 @@ async function main() {
 	console.log("console.log('Token set in localStorage');");
 	console.log("\n=== For API Testing (curl) ===");
 	console.log(
-		`curl -H "Authorization: Bearer ${token}" http://localhost:3000/tasks`,
+		`curl -H "Authorization: Bearer ${token}" http://localhost:3000/users/me`,
 	);
 }
 

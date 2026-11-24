@@ -97,9 +97,6 @@ services:
       - REDIS_URL=redis://redis:6379
       - JWT_SECRET=super_secret_access_key_dont_use_in_prod
       - JWT_REFRESH_SECRET=super_secret_refresh_key_dont_use_in_prod
-      - GOOGLE_CLIENT_ID=mock_google_client_id
-      - GOOGLE_CLIENT_SECRET=mock_google_client_secret
-      - GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/callback
       - WEB_URL=http://localhost:4097
       - LOG_LEVEL=info
       - TRUST_PROXY=true

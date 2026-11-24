@@ -41,7 +41,7 @@ async function runMigration(dbName: string, sqlFilePath: string) {
 
 async function main() {
 	try {
-		const rootDir = path.join(__dirname, "..");
+		const rootDir = path.join(import.meta.dirname, "..");
 
 		await runMigration(
 			"auth_db",

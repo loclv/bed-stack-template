@@ -15,7 +15,7 @@ const TARGETS = [
 ];
 
 function processEnvFile(target: { name: string; dir: string }) {
-	const rootDir = path.resolve(__dirname, "..");
+	const rootDir = path.resolve(import.meta.dirname, "..");
 	const targetDir = path.resolve(rootDir, target.dir);
 	const examplePath = path.join(targetDir, ".env.example");
 	const envPath = path.join(targetDir, ".env");
