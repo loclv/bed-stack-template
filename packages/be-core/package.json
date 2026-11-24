@@ -1,0 +1,36 @@
+{
+	"name": "@bed-stack/be-core",
+	"private": true,
+	"type": "module",
+	"module": "src/index.ts",
+	"types": "src/index.ts",
+	"exports": {
+		".": "./src/index.ts",
+		"./config": "./src/config.ts",
+		"./logger": "./src/logger.ts",
+		"./health": "./src/health.ts",
+		"./shutdown": "./src/shutdown.ts",
+		"./auth-middleware": "./src/auth-middleware.ts",
+		"./database": "./src/database.ts",
+		"./redis": "./src/redis.ts",
+		"./kafka": "./src/kafka.ts",
+		"./outbox": "./src/outbox.ts",
+		"./response": "./src/response.ts",
+		"./rate-limiter": "./src/rate-limiter.ts",
+		"./metrics": "./src/metrics.ts"
+	},
+	"dependencies": {
+		"@elysiajs/jwt": "catalog:api",
+		"drizzle-orm": "catalog:api",
+		"elysia": "catalog:api",
+		"ioredis": "^5.6.1",
+		"kafkajs": "^2.2.4",
+		"pg": "^8.16.0",
+		"prom-client": "^15.1.3"
+	},
+	"devDependencies": {
+		"@types/pg": "^8.11.13",
+		"@types/bun": "catalog:",
+		"typescript": "catalog:"
+	}
+}

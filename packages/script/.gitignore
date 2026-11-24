@@ -1,0 +1,13 @@
+node_modules
+out
+dist
+coverage
+*.lcov
+logs
+_.log
+.env
+.env.development.local
+.env.test.local
+.env.production.local
+.env.local
+*.tsbuildinfo

@@ -1,0 +1,39 @@
+# Dependency directories
+node_modules/
+packages/*/node_modules/
+
+# Build outputs
+packages/web/dist/
+packages/api/dist/
+dist/
+
+# TypeScript build info
+.tsbuildinfo
+packages/*/.tsbuildinfo
+
+# Local configuration and environment files
+.env
+.env.local
+packages/*/.env
+packages/*/.env.local
+
+# Databases and database journals
+*.db
+*.db-journal
+
+# Version control
+.git/
+.gitignore
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# IDE configuration
+.vscode/
+.idea/
+.agents/
+.claude/
+.gitnexus/
+.opencode/
+.ralph/

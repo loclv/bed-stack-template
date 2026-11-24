@@ -1,0 +1,10 @@
+name,description,path
+database,Schema,database.md
+deployment,Configuration,deployment.md
+development,Setup,development.md
+features,Seat Reservation Web Application — Specification,features.md
+openapi,OpenAPI Plugin,openapi.md
+security-review,Security Review — Seat Reservation,security-review.md
+system-flows,Seat Reservation System - UML Flow Diagrams,system-flows.md
+test-plan,Running Tests,test-plan.md
+validation,Validation,validation.md

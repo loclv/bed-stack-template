@@ -1,0 +1,27 @@
+{
+	"name": "@bed-stack/payment-service",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "bun run --watch src/index.ts",
+		"start": "bun run src/index.ts",
+		"test": "bun test",
+		"build": "bun build --compile --production --outfile dist/server src/index.ts"
+	},
+	"dependencies": {
+		"@bed-stack/be-core": "workspace:*",
+		"@bed-stack/contracts": "workspace:*",
+		"@elysiajs/cors": "^1.4.1",
+		"@elysiajs/jwt": "catalog:api",
+		"drizzle-orm": "catalog:api",
+		"elysia": "catalog:api",
+		"ioredis": "^5.6.1",
+		"kafkajs": "^2.2.4",
+		"pg": "^8.16.0"
+	},
+	"devDependencies": {
+		"@types/pg": "^8.11.13",
+		"@types/bun": "catalog:",
+		"typescript": "catalog:"
+	}
+}

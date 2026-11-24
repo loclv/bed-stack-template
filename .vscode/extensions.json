@@ -1,0 +1,8 @@
+{
+	"recommendations": [
+		"oxc.oxc-vscode",
+		"biomejs.biome",
+		"usernamehw.errorlens",
+		"oven.bun-vscode"
+	]
+}

@@ -1,0 +1,10 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"composite": true,
+		"tsBuildInfoFile": ".tsbuildinfo",
+		"skipLibCheck": true // Skip type checking of declaration files to speed up compilation
+	},
+	"include": ["src"],
+	"exclude": ["node_modules"]
+}

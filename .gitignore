@@ -1,0 +1,26 @@
+node_modules
+
+out
+dist
+*.tgz
+
+coverage
+*.lcov
+
+logs
+*.log
+
+# dotenv environment variable files
+.env
+.env.development.local
+.env.test.local
+.env.production.local
+.env.local
+
+*.tsbuildinfo
+
+# SQLite database files
+*.db
+
+# Finder (MacOS) folder config
+.DS_Store

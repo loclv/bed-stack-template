@@ -1,0 +1,37 @@
+{
+	"name": "@bed-stack/api",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"test": "bun test",
+		"dev": "bun run --watch src/index.ts",
+		"build": "NODE_ENV=production bun build --compile --production --target=bun-linux-x64 --outfile dist/server ./src/index.ts"
+	},
+	"module": "src/index.ts",
+	"types": "src/types/index.ts",
+	"exports": {
+		".": {
+			"types": "./src/types/index.ts",
+			"default": "./src/index.ts"
+		}
+	},
+	"dependencies": {
+		"@elysiajs/cors": "^1.4.1",
+		"@elysiajs/jwt": "catalog:api",
+		"@elysiajs/openapi": "^1.4.14",
+		"@sinclair/typebox": "catalog:api",
+		"drizzle-orm": "catalog:api",
+		"drizzle-typebox": "catalog:api",
+		"elysia": "catalog:api",
+		"google-auth-library": "catalog:api",
+		"nanoid": "catalog:api"
+	},
+	"devDependencies": {
+		"bun-types": "catalog:api",
+		"@types/bun": "catalog:",
+		"typescript": "catalog:"
+	},
+	"overrides": {
+		"@sinclair/typebox": "0.34.48"
+	}
+}

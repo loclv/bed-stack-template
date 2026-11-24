@@ -1,0 +1,222 @@
+version: "3.8"
+
+services:
+  # ==============================================================================
+  # Database (PostgreSQL)
+  # ==============================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: seat-reservation-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    # Configure postgres for connection limits, slow statements logging, and deadlock troubleshooting
+    command: >
+      postgres 
+      -c max_connections=100
+      -c log_min_duration_statement=100
+      -c log_lock_waits=on
+      -c deadlock_timeout=1s
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ==============================================================================
+  # Cache & Rate Limiting (Redis)
+  # ==============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: seat-reservation-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ==============================================================================
+  # Message Broker (Kafka in Single-Node KRaft Mode)
+  # ==============================================================================
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: seat-reservation-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
+      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9092'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 9092 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ==============================================================================
+  # Auth Microservice (Port 3001)
+  # ==============================================================================
+  auth-service:
+    build:
+      context: .
+      dockerfile: apps/auth-service/Dockerfile
+    container_name: seat-reservation-auth
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=development
+      - AUTH_PORT=3001
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/auth_db
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=super_secret_access_key_dont_use_in_prod
+      - JWT_REFRESH_SECRET=super_secret_refresh_key_dont_use_in_prod
+      - GOOGLE_CLIENT_ID=mock_google_client_id
+      - GOOGLE_CLIENT_SECRET=mock_google_client_secret
+      - GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/callback
+      - WEB_URL=http://localhost:4097
+      - LOG_LEVEL=info
+      - TRUST_PROXY=true
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:3001/health/live').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ==============================================================================
+  # Seat Reservation Microservice (Port 3002)
+  # ==============================================================================
+  seat-service:
+    build:
+      context: .
+      dockerfile: apps/seat-service/Dockerfile
+    container_name: seat-reservation-seats
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=development
+      - SEAT_PORT=3002
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/seat_db
+      - REDIS_URL=redis://redis:6379
+      - KAFKA_BROKERS=kafka:29092
+      - JWT_SECRET=super_secret_access_key_dont_use_in_prod
+      - JWT_REFRESH_SECRET=super_secret_refresh_key_dont_use_in_prod
+      - WEB_URL=http://localhost:4097
+      - LOG_LEVEL=info
+      - TRUST_PROXY=true
+      - HOLD_TTL_SECONDS=300
+      - SWEEPER_INTERVAL_MS=10000
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:3002/health/live').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ==============================================================================
+  # Payment Microservice (Port 3003)
+  # ==============================================================================
+  payment-service:
+    build:
+      context: .
+      dockerfile: apps/payment-service/Dockerfile
+    container_name: seat-reservation-payment
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=development
+      - PAYMENT_PORT=3003
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/payment_db
+      - REDIS_URL=redis://redis:6379
+      - KAFKA_BROKERS=kafka:29092
+      - JWT_SECRET=super_secret_access_key_dont_use_in_prod
+      - JWT_REFRESH_SECRET=super_secret_refresh_key_dont_use_in_prod
+      - STRIPE_SECRET_KEY=sk_test_mock_key
+      - STRIPE_WEBHOOK_SECRET=whsec_mock_secret
+      - WEB_URL=http://localhost:4097
+      - LOG_LEVEL=info
+      - TRUST_PROXY=true
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:3003/health/live').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ==============================================================================
+  # API Gateway (Nginx proxying on Port 3000)
+  # ==============================================================================
+  gateway:
+    image: nginx:alpine
+    container_name: seat-reservation-gateway
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      seat-service:
+        condition: service_healthy
+      payment-service:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ==============================================================================
+  # Web Frontend (Port 4097)
+  # ==============================================================================
+  web:
+    build:
+      context: .
+      target: web
+      args:
+        - PUBLIC_API_URL=${PUBLIC_API_URL:-http://localhost:3000/api}
+    container_name: seat-reservation-web
+    ports:
+      - "4097:80"
+    depends_on:
+      - gateway
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local

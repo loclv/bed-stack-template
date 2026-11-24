@@ -1,0 +1,34 @@
+{
+	"cSpell.words": [
+		"AUTOINCREMENT",
+		"Elysia",
+		"elysiajs",
+		"opencode",
+		"rsbuild",
+		"typebox",
+		"worklog",
+		"worklogs"
+	],
+	"editor.defaultFormatter": "biomejs.biome",
+	"editor.formatOnSave": true,
+	"editor.codeActionsOnSave": {
+		"source.fixAll.biome": "explicit"
+	},
+	"[javascript]": {
+		"editor.defaultFormatter": "biomejs.biome"
+	},
+	"[typescriptreact]": {
+		"editor.defaultFormatter": "biomejs.biome"
+	},
+	"js/ts.tsdk.path": "node_modules/typescript/lib",
+	"js/ts.tsdk.promptToUseWorkspaceVersion": true,
+	// Disable auto-imports from package.json to prevent conflicts with workspace monorepo structure
+	"js/ts.preferences.includePackageJsonAutoImports": "off",
+	"[css]": {
+		"editor.defaultFormatter": "biomejs.biome"
+	},
+	"[markdown]": {
+		"editor.formatOnSave": true,
+		"editor.defaultFormatter": "DavidAnson.vscode-markdownlint"
+	}
+}

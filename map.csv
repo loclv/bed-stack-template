@@ -1,0 +1,155 @@
+name,description,path
+agents,AGENTS.md,AGENTS.md
+decisions,Architectural & Concurrency Decisions,DECISIONS.md
+dockerfile,,Dockerfile
+readme,bed-stack — Seat Reservation,README.md
+security-improvements,Distributed Seat Reservation System — Security & Reliability Specification,SECURITY_IMPROVEMENTS.md
+skill,BED Stack Development Skill,SKILL.md
+,Apps,apps/
+,Auth Service,apps/auth-service/
+dockerfile,,apps/auth-service/Dockerfile
+,Src,apps/auth-service/src/
+config,Auth service configuration.,apps/auth-service/src/config.ts
+index,Auth service — Elysia entry point.,apps/auth-service/src/index.ts
+,Routes,apps/auth-service/src/routes/
+auth,"Auth routes: login, register, OAuth callback, refresh, logout, logout-all.",apps/auth-service/src/routes/auth.ts
+users,User profile routes for the auth service.,apps/auth-service/src/routes/users.ts
+,Services,apps/auth-service/src/services/
+password,Argon2id password hashing with timing equalization.,apps/auth-service/src/services/password.ts
+token,Refresh token service with family tracking and reuse detection.,apps/auth-service/src/services/token.ts
+,Payment Service,apps/payment-service/
+dockerfile,,apps/payment-service/Dockerfile
+,Src,apps/payment-service/src/
+config,Payment service configuration.,apps/payment-service/src/config.ts
+index,Payment Service — Elysia Entry Point.,apps/payment-service/src/index.ts
+,Routes,apps/payment-service/src/routes/
+payment,"Payment routes: reserve seat, webhook receiver.",apps/payment-service/src/routes/payment.ts
+,Services,apps/payment-service/src/services/
+provider,Payment provider boundary and mock Stripe client.,apps/payment-service/src/services/provider.ts
+worker,Webhook Inbox Worker.,apps/payment-service/src/services/worker.ts
+,Seat Service,apps/seat-service/
+dockerfile,,apps/seat-service/Dockerfile
+,Src,apps/seat-service/src/
+config,Seat service configuration.,apps/seat-service/src/config.ts
+index,Seat service — Elysia entry point.,apps/seat-service/src/index.ts
+,Routes,apps/seat-service/src/routes/
+seats,"Seat routes: list, hold, release, reserve, SSE stream.",apps/seat-service/src/routes/seats.ts
+,Services,apps/seat-service/src/services/
+seat-events,Kafka consumer for payment events in the seat service.,apps/seat-service/src/services/seat-events.ts
+sweeper,Expired hold sweeper service.,apps/seat-service/src/services/sweeper.ts
+bun,,bun.lock
+bunfig,,bunfig.toml
+codedb,,codedb.snapshot
+docker-compose,,docker-compose.yml
+,Docs,docs/
+database,Distributed Seat Reservation System — Database Specification,docs/database.md
+deployment,Distributed Seat Reservation System — Deployment Guide,docs/deployment.md
+development,Distributed Seat Reservation System — Developer Guide,docs/development.md
+docker,Distributed Seat Reservation System — Docker & Compose Deployment,docs/docker.md
+features,Distributed Seat Reservation System — Feature Specification,docs/features.md
+openapi,Distributed Seat Reservation System — API Specification (OpenAPI 3.0),docs/openapi.md
+security-review,Security Review — Seat Reservation,docs/security-review.md
+system-flows,Distributed Seat Reservation System — UML Flows & Architectures,docs/system-flows.md
+test-plan,Distributed Seat Reservation System — Quality & Verification Test Plan,docs/test-plan.md
+validation,Distributed Seat Reservation System — Input & Boundary Validation,docs/validation.md
+,Infra,infra/
+,Nginx,infra/nginx/
+nginx,,infra/nginx/nginx.conf
+,Postgres,infra/postgres/
+init,,infra/postgres/init.sql
+,Migrations,migrations/
+,Auth,migrations/auth/
+0001-init,,migrations/auth/0001_init.sql
+,Payment,migrations/payment/
+0001-init,,migrations/payment/0001_init.sql
+,Seat,migrations/seat/
+0001-init,,migrations/seat/0001_init.sql
+nginx,,nginx.conf
+,Packages,packages/
+,Api,packages/api/
+readme,Elysia with Bun runtime,packages/api/README.md
+,Scripts,packages/api/scripts/
+generate-jwt,JWT Token Generator for Testing,packages/api/scripts/generate-jwt.ts
+,Src,packages/api/src/
+auth,TypeScript module: auth.,packages/api/src/auth.ts
+,Db,packages/api/src/db/
+index,TypeScript module: index.,packages/api/src/db/index.ts
+schema,TypeScript module: schema.,packages/api/src/db/schema.ts
+index,TypeScript module: index.,packages/api/src/index.ts
+,Routes,packages/api/src/routes/
+auth,TypeScript module: auth.,packages/api/src/routes/auth.ts
+seats,TypeScript module: seats.,packages/api/src/routes/seats.ts
+users,TypeScript module: users.,packages/api/src/routes/users.ts
+,Types,packages/api/src/types/
+process-env-d,TypeScript module: process-env-d.,packages/api/src/types/process-env.d.ts
+,Utils,packages/api/src/utils/
+const,TypeScript module: const.,packages/api/src/utils/const.ts
+csrf,CSRF protection using the Signed Double-Submit Cookie pattern.,packages/api/src/utils/csrf.ts
+database,TypeScript module: database.,packages/api/src/utils/database.ts
+logger,TypeScript module: logger.,packages/api/src/utils/logger.ts
+rate-limiter,TypeScript module: rate-limiter.,packages/api/src/utils/rate-limiter.ts
+response,TypeScript module: response.,packages/api/src/utils/response.ts
+validation,TypeScript module: validation.,packages/api/src/utils/validation.ts
+,Tests,packages/api/tests/
+readme,Agent API Unit Tests,packages/api/tests/README.md
+auth-test,TypeScript module: auth-test.,packages/api/tests/auth.test.ts
+csrf-test,TypeScript module: csrf-test.,packages/api/tests/csrf.test.ts
+rate-limiter-test,TypeScript module: rate-limiter-test.,packages/api/tests/rate-limiter.test.ts
+response-test,TypeScript module: response-test.,packages/api/tests/response.test.ts
+validation-elysia-test,TypeScript module: validation-elysia-test.,packages/api/tests/validation-elysia.test.ts
+validation-test,TypeScript module: validation-test.,packages/api/tests/validation.test.ts
+,Be Core,packages/be-core/
+,Src,packages/be-core/src/
+auth-middleware,JWT authentication middleware for Elysia.,packages/be-core/src/auth-middleware.ts
+config,Zod-based environment configuration with required/optional var handling.,packages/be-core/src/config.ts
+database,PostgreSQL database connection pool using pg (node-postgres).,packages/be-core/src/database.ts
+health,Health check Elysia plugin providing /health/live and /health/ready endpoints.,packages/be-core/src/health.ts
+index,@bed-stack/be-core,packages/be-core/src/index.ts
+kafka,Kafka producer and consumer abstractions using KafkaJS.,packages/be-core/src/kafka.ts
+logger,Structured JSON logger with correlation ID support.,packages/be-core/src/logger.ts
+metrics,Prometheus metrics endpoint for business and infrastructure monitoring.,packages/be-core/src/metrics.ts
+outbox,Transactional outbox pattern implementation.,packages/be-core/src/outbox.ts
+rate-limiter,Redis-backed rate limiter with per-endpoint configuration.,packages/be-core/src/rate-limiter.ts
+redis,"Redis client wrapper for caching, rate limiting, and pub/sub.",packages/be-core/src/redis.ts
+response,Standardized API response builder.,packages/be-core/src/response.ts
+shutdown,Graceful shutdown handler for SIGTERM/SIGINT.,packages/be-core/src/shutdown.ts
+,Contracts,packages/contracts/
+,Src,packages/contracts/src/
+events,Typed Kafka event contracts for inter-service communication.,packages/contracts/src/events.ts
+index,@bed-stack/contracts,packages/contracts/src/index.ts
+,Script,packages/script/
+claude,Default to using Bun instead of Node.js.,packages/script/CLAUDE.md
+readme,script,packages/script/README.md
+index,TypeScript module: index.,packages/script/index.ts
+,Web,packages/web/
+agents,AGENTS.md,packages/web/AGENTS.md
+readme,Rsbuild project,packages/web/README.md
+bunfig,,packages/web/bunfig.toml
+postcss-config,,packages/web/postcss.config.mjs
+,Public,packages/web/public/
+favicon,,packages/web/public/favicon.png
+rsbuild-config,TypeScript module: rsbuild-config.,packages/web/rsbuild.config.ts
+,Src,packages/web/src/
+app,,packages/web/src/App.css
+app,Get the CSRF HMAC signature to send as x-csrf-token header.,packages/web/src/App.tsx
+,Components,packages/web/src/components/
+openapiexample,Example component demonstrating OpenAPI usage,packages/web/src/components/OpenApiExample.tsx
+env-d,Imports the SVG file as a React component.,packages/web/src/env.d.ts
+index,TSX module: index.,packages/web/src/index.tsx
+,Lib,packages/web/src/lib/
+api-types,TypeScript module: api-types.,packages/web/src/lib/api-types.ts
+api,Type-safe API client using OpenAPI.,packages/web/src/lib/api.ts
+queries,TypeScript module: queries.,packages/web/src/lib/queries.ts
+,Types,packages/web/src/types/
+index,TypeScript module: index.,packages/web/src/types/index.ts
+,Utils,packages/web/src/utils/
+,Tests,packages/web/tests/
+app-test,TSX module: app-test.,packages/web/tests/App.test.tsx
+setup,TypeScript module: setup.,packages/web/tests/setup.ts
+,Plan,plan/
+,Scripts,scripts/
+copy-envs,Script to copy .env.example files to .env in the root and all service/package directories.,scripts/copy-envs.ts
+run-migrations,,scripts/run-migrations.sh
+run-migrations,Database Migration Runner.,scripts/run-migrations.ts
+smoke-test,,scripts/smoke-test.sh
+sync-skills,,scripts/sync-skills.sh
