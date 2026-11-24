@@ -2,7 +2,7 @@
 This document describes the setup, execution, testing, and common tasks for developing in the distributed seat reservation microservices system.
 
 ## 1. Prerequisites
-- Bun >=1.3.14 (Used for all local script executions and workspace installations).
+- Bun (Used for all local script executions and workspace installations).
 - Docker Engine & Docker Compose (Used to orchestrate databases, cache, broker, and gateway).
 
 ## 2. Workspace Setup

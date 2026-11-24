@@ -2,7 +2,7 @@
 This document covers the configuration, orchestration, and production considerations for deploying the distributed seat reservation microservices system.
 
 ## 1. System Requirements
-- Bun >=1.3.14 (runtime for all microservices)
+- Bun (runtime for all microservices)
 - Docker & Docker Compose (for orchestrating Postgres, Redis, Kafka, and Nginx)
 - PostgreSQL 15+ (database engine)
 - Redis 7+ (rate limiting store & SSE pub/sub)
