@@ -83,7 +83,7 @@ const app = new Elysia({ maxBodySize: 1024 * 1024 })
 			origin: config.nodeEnv === "production" ? config.webUrl : true,
 			credentials: true,
 			methods: ["GET", "POST", "OPTIONS"],
-			allowedHeaders: ["Content-Type", "Authorization"],
+			allowedHeaders: ["Content-Type", "Authorization", "x-csrf-token"],
 		}),
 	)
 	.use(

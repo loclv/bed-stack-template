@@ -9,8 +9,9 @@
  */
 
 import {
+	createCsrfProtection,
 	createLogger,
-	invalidateTokenVersionCache,
+	publishTokenVersion,
 	ResponseBuilder,
 } from "@bed-stack/be-core";
 import type { RedisRateLimiter } from "@bed-stack/be-core/rate-limiter";
@@ -30,6 +31,51 @@ import {
 const logger = createLogger("auth-routes");
 
 const REFRESH_COOKIE_NAME = "refresh_token";
+
+// tokenVersion is published to Redis so sibling services (seat/payment) can
+// reject access tokens revoked by logout-all. The TTL only needs to outlive
+// the longest-lived access token; refresh re-publishes on every rotation.
+const TOKEN_VERSION_TTL_SECONDS = 24 * 60 * 60;
+const CSRF_COOKIE_MAX_AGE_SECONDS = 24 * 60 * 60;
+
+type CookieJar = Record<
+	string,
+	{ value?: string; set: (opts: Record<string, unknown>) => void }
+>;
+
+/**
+ * Rotate the CSRF nonce cookie and return the HMAC signature the client must
+ * send back as the x-csrf-token header on mutating requests.
+ */
+async function issueCsrfSignature(
+	cookie: CookieJar,
+	isProduction: boolean,
+	csrfProtection: ReturnType<typeof createCsrfProtection>,
+): Promise<string> {
+	const tokens = await csrfProtection.generateTokens();
+	cookie[csrfProtection.getCookieName()]?.set({
+		value: tokens.cookie,
+		httpOnly: false,
+		secure: isProduction,
+		sameSite: "lax",
+		path: "/",
+		maxAge: CSRF_COOKIE_MAX_AGE_SECONDS,
+	});
+	return tokens.header;
+}
+
+/** Validate the x-csrf-token header against the csrf-token cookie nonce. */
+async function isCsrfValid(
+	headers: Record<string, unknown>,
+	cookie: CookieJar,
+	csrfProtection: ReturnType<typeof createCsrfProtection>,
+): Promise<boolean> {
+	const headerToken = headers[csrfProtection.getHeaderName()] as
+		| string
+		| undefined;
+	const cookieNonce = cookie[csrfProtection.getCookieName()]?.value;
+	return csrfProtection.validateToken(headerToken || "", cookieNonce || "");
+}
 
 /** Set refresh token as httpOnly cookie. */
 function setRefreshCookie(
@@ -101,6 +147,7 @@ export function authRoutes(
 	tokenRefreshCounter: Counter,
 ) {
 	const isProduction = config.nodeEnv === "production";
+	const csrfProtection = createCsrfProtection(config.jwtSecret);
 
 	return (
 		new Elysia({ prefix: "/auth" })
@@ -156,6 +203,12 @@ export function authRoutes(
 					});
 
 					const refresh = await issueNewRefreshToken(pool, user.id);
+					await publishTokenVersion(
+						redis,
+						user.id,
+						0,
+						TOKEN_VERSION_TTL_SECONDS,
+					);
 
 					// Set cookies
 					cookie.token.set({
@@ -172,6 +225,11 @@ export function authRoutes(
 						refresh.maxAge,
 						isProduction,
 					);
+					const csrfToken = await issueCsrfSignature(
+						cookie as any,
+						isProduction,
+						csrfProtection,
+					);
 
 					loginCounter.inc({ method: "register", status: "success" });
 					await auditLog(pool, user.id, "register", { email }, clientIP);
@@ -179,6 +237,7 @@ export function authRoutes(
 					logger.info("User registered", { userId: user.id, email });
 					return ResponseBuilder.success({
 						user: { id: user.id, email: user.email },
+						csrfToken,
 					});
 				},
 				{
@@ -250,6 +309,12 @@ export function authRoutes(
 					});
 
 					const refresh = await issueNewRefreshToken(pool, user.id);
+					await publishTokenVersion(
+						redis,
+						user.id,
+						user.token_version,
+						TOKEN_VERSION_TTL_SECONDS,
+					);
 
 					cookie.token.set({
 						value: accessToken,
@@ -265,6 +330,11 @@ export function authRoutes(
 						refresh.maxAge,
 						isProduction,
 					);
+					const csrfToken = await issueCsrfSignature(
+						cookie as any,
+						isProduction,
+						csrfProtection,
+					);
 
 					loginCounter.inc({ method: "login", status: "success" });
 					await auditLog(pool, user.id, "login", { email }, clientIP);
@@ -272,6 +342,7 @@ export function authRoutes(
 					logger.info("User logged in", { userId: user.id, email });
 					return ResponseBuilder.success({
 						user: { id: user.id, email: user.email, name: user.name },
+						csrfToken,
 					});
 				},
 				{
@@ -317,6 +388,12 @@ export function authRoutes(
 					});
 
 					const refresh = await issueNewRefreshToken(pool, user.id);
+					await publishTokenVersion(
+						redis,
+						user.id,
+						user.token_version,
+						TOKEN_VERSION_TTL_SECONDS,
+					);
 
 					cookie.token.set({
 						value: accessToken,
@@ -327,11 +404,16 @@ export function authRoutes(
 						maxAge: config.atTtlSeconds,
 					});
 					setRefreshCookie(cookie as any, refresh.raw, refresh.maxAge, false);
+					const csrfToken = await issueCsrfSignature(
+						cookie as any,
+						false,
+						csrfProtection,
+					);
 
 					loginCounter.inc({ method: "mock-login", status: "success" });
 					await auditLog(pool, user.id, "mock_login", { email }, clientIP);
 
-					return ResponseBuilder.success({ user });
+					return ResponseBuilder.success({ user, csrfToken });
 				},
 				{
 					body: t.Object({
@@ -342,7 +424,18 @@ export function authRoutes(
 			)
 
 			// ─── Refresh Token ────────────────────────────────────────────────
-			.post("/refresh", async ({ cookie, jwt, set, request }) => {
+			.post("/refresh", async ({ cookie, jwt, set, request, headers }) => {
+				if (
+					!(await isCsrfValid(
+						headers as Record<string, unknown>,
+						cookie as any,
+						csrfProtection,
+					))
+				) {
+					set.status = 403;
+					return ResponseBuilder.forbidden("Invalid CSRF token");
+				}
+
 				const rawToken = cookie[REFRESH_COOKIE_NAME]?.value;
 				if (!rawToken) {
 					set.status = 401;
@@ -403,14 +496,36 @@ export function authRoutes(
 					result.newToken.maxAge,
 					isProduction,
 				);
+				await publishTokenVersion(
+					redis,
+					user.id,
+					user.token_version,
+					TOKEN_VERSION_TTL_SECONDS,
+				);
+				const csrfToken = await issueCsrfSignature(
+					cookie as any,
+					isProduction,
+					csrfProtection,
+				);
 
 				tokenRefreshCounter.inc({ status: "success" });
 				logger.info("Token refreshed", { userId: user.id });
-				return ResponseBuilder.success({ authenticated: true });
+				return ResponseBuilder.success({ authenticated: true, csrfToken });
 			})
 
 			// ─── Logout (current session only) ────────────────────────────────
-			.post("/logout", async ({ cookie, set, request }) => {
+			.post("/logout", async ({ cookie, set, request, headers }) => {
+				if (
+					!(await isCsrfValid(
+						headers as Record<string, unknown>,
+						cookie as any,
+						csrfProtection,
+					))
+				) {
+					set.status = 403;
+					return ResponseBuilder.forbidden("Invalid CSRF token");
+				}
+
 				const clientIP = getClientIP(request, config.trustProxy);
 				const refreshRaw = cookie[REFRESH_COOKIE_NAME]?.value;
 
@@ -438,7 +553,18 @@ export function authRoutes(
 			})
 
 			// ─── Logout All Devices ───────────────────────────────────────────
-			.post("/logout-all", async ({ cookie, jwt, set, request }) => {
+			.post("/logout-all", async ({ cookie, jwt, set, request, headers }) => {
+				if (
+					!(await isCsrfValid(
+						headers as Record<string, unknown>,
+						cookie as any,
+						csrfProtection,
+					))
+				) {
+					set.status = 403;
+					return ResponseBuilder.forbidden("Invalid CSRF token");
+				}
+
 				const clientIP = getClientIP(request, config.trustProxy);
 				const token = cookie.token?.value;
 
@@ -456,12 +582,22 @@ export function authRoutes(
 
 					const userId = payload.userId as number;
 
-					// Bump tokenVersion (invalidates ALL access tokens)
-					await pool.query(
-						"UPDATE users SET token_version = token_version + 1 WHERE id = $1",
+					// Bump tokenVersion (invalidates ALL access tokens) and publish
+					// the new version so sibling services reject stale tokens too.
+					const bumped = await pool.query<{ token_version: number }>(
+						`UPDATE users SET token_version = token_version + 1
+						 WHERE id = $1 RETURNING token_version`,
 						[userId],
 					);
-					await invalidateTokenVersionCache(redis, userId);
+					const newVersion = bumped.rows[0]?.token_version;
+					if (newVersion !== undefined) {
+						await publishTokenVersion(
+							redis,
+							userId,
+							newVersion,
+							TOKEN_VERSION_TTL_SECONDS,
+						);
+					}
 
 					// Revoke ALL refresh tokens for this user
 					await revokeAllRefreshTokensForUser(pool, userId);
@@ -493,21 +629,46 @@ export function authRoutes(
 					}
 
 					const userId = payload.userId as number;
+					const tokenVersion = payload.tokenVersion as number | undefined;
 					const result = await pool.query<{
 						id: number;
 						email: string;
 						name: string | null;
 						picture: string | null;
-					}>("SELECT id, email, name, picture FROM users WHERE id = $1", [
-						userId,
-					]);
+						token_version: number;
+					}>(
+						"SELECT id, email, name, picture, token_version FROM users WHERE id = $1",
+						[userId],
+					);
 
 					const user = result.rows[0];
 					if (!user) {
 						return ResponseBuilder.success({ authenticated: false });
 					}
 
-					return ResponseBuilder.success({ authenticated: true, user });
+					// Reject tokens revoked by logout-all (tokenVersion bump)
+					if (
+						tokenVersion !== undefined &&
+						user.token_version !== tokenVersion
+					) {
+						return ResponseBuilder.success({ authenticated: false });
+					}
+
+					const csrfToken = await issueCsrfSignature(
+						cookie as any,
+						isProduction,
+						csrfProtection,
+					);
+					return ResponseBuilder.success({
+						authenticated: true,
+						user: {
+							id: user.id,
+							email: user.email,
+							name: user.name,
+							picture: user.picture,
+						},
+						csrfToken,
+					});
 				} catch {
 					return ResponseBuilder.success({ authenticated: false });
 				}

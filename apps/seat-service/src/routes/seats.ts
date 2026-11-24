@@ -19,7 +19,9 @@
 import {
 	appendOutbox,
 	Counter,
+	createCsrfProtection,
 	createLogger,
+	getCachedTokenVersion,
 	type Registry,
 	ResponseBuilder,
 } from "@bed-stack/be-core";
@@ -82,16 +84,50 @@ export function seatRoutes(
 		registers: [metricsRegistry],
 	});
 
+	const csrfProtection = createCsrfProtection(config.jwtSecret);
+
+	/**
+	 * Verify the x-csrf-token header against the csrf-token cookie nonce.
+	 * Mutating endpoints authenticate via cookie, so they require the
+	 * double-submit signature issued by the auth service.
+	 */
+	const isCsrfValid = async (
+		headers: Record<string, unknown>,
+		cookie: { [key: string]: { value?: string } | undefined },
+	): Promise<boolean> => {
+		const headerToken = headers[csrfProtection.getHeaderName()] as
+			| string
+			| undefined;
+		const cookieNonce = cookie?.[csrfProtection.getCookieName()]?.value;
+		return csrfProtection.validateToken(headerToken || "", cookieNonce || "");
+	};
+
+	/**
+	 * Reject access tokens whose tokenVersion was revoked by logout-all.
+	 * The auth service publishes the current version to Redis; when no
+	 * version is published the check is skipped (unknown state).
+	 */
+	const isTokenVersionCurrent = async (
+		userId: number,
+		tokenVersion: unknown,
+	): Promise<boolean> => {
+		if (typeof tokenVersion !== "number") return true;
+		const current = await getCachedTokenVersion(redis, userId);
+		return current === null || current === tokenVersion;
+	};
+
 	const holdHandler = async ({
 		params,
 		jwt,
 		cookie,
 		set,
+		headers,
 	}: {
 		params: { id: string };
 		jwt: any;
 		cookie: any;
 		set: any;
+		headers: Record<string, unknown>;
 	}) => {
 		// Auth check
 		const token = cookie?.token?.value;
@@ -100,7 +136,13 @@ export function seatRoutes(
 			return ResponseBuilder.unauthorized();
 		}
 
+		if (!(await isCsrfValid(headers, cookie))) {
+			set.status = 403;
+			return ResponseBuilder.forbidden("Invalid CSRF token");
+		}
+
 		let userId: number;
+		let tokenVersion: unknown;
 		try {
 			const payload = await jwt.verify(token);
 			if (!payload || typeof payload === "boolean") {
@@ -108,9 +150,15 @@ export function seatRoutes(
 				return ResponseBuilder.unauthorized();
 			}
 			userId = payload.userId as number;
+			tokenVersion = payload.tokenVersion;
 		} catch {
 			set.status = 401;
 			return ResponseBuilder.unauthorized();
+		}
+
+		if (!(await isTokenVersionCurrent(userId, tokenVersion))) {
+			set.status = 401;
+			return ResponseBuilder.unauthorized("Session has been revoked");
 		}
 
 		const seatId = Number(params.id);
@@ -237,11 +285,13 @@ export function seatRoutes(
 		jwt,
 		cookie,
 		set,
+		headers,
 	}: {
 		params: { id: string };
 		jwt: any;
 		cookie: any;
 		set: any;
+		headers: Record<string, unknown>;
 	}) => {
 		const token = cookie?.token?.value;
 		if (!token) {
@@ -249,7 +299,13 @@ export function seatRoutes(
 			return ResponseBuilder.unauthorized();
 		}
 
+		if (!(await isCsrfValid(headers, cookie))) {
+			set.status = 403;
+			return ResponseBuilder.forbidden("Invalid CSRF token");
+		}
+
 		let userId: number;
+		let tokenVersion: unknown;
 		try {
 			const payload = await jwt.verify(token);
 			if (!payload || typeof payload === "boolean") {
@@ -257,9 +313,15 @@ export function seatRoutes(
 				return ResponseBuilder.unauthorized();
 			}
 			userId = payload.userId as number;
+			tokenVersion = payload.tokenVersion;
 		} catch {
 			set.status = 401;
 			return ResponseBuilder.unauthorized();
+		}
+
+		if (!(await isTokenVersionCurrent(userId, tokenVersion))) {
+			set.status = 401;
+			return ResponseBuilder.unauthorized("Session has been revoked");
 		}
 
 		const seatId = Number(params.id);

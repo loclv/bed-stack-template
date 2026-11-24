@@ -82,6 +82,39 @@ export async function invalidateTokenVersionCache(
 }
 
 /**
+ * Read the published tokenVersion for a user from Redis.
+ * Returns null when no version has been published (unknown — callers
+ * should decide whether to allow or deny).
+ */
+export async function getCachedTokenVersion(
+	redis: Redis,
+	userId: number,
+): Promise<number | null> {
+	const cached = await redis.get(`${TOKEN_VERSION_CACHE_PREFIX}${userId}`);
+	if (cached === null) return null;
+	const version = Number.parseInt(cached, 10);
+	return Number.isNaN(version) ? null : version;
+}
+
+/**
+ * Publish the user's current tokenVersion to Redis so sibling services
+ * (which cannot reach the auth database) can reject stale access tokens.
+ * Called by the auth service on every token issuance and on logout-all.
+ */
+export async function publishTokenVersion(
+	redis: Redis,
+	userId: number,
+	version: number,
+	ttlSeconds: number,
+): Promise<void> {
+	await redis.setex(
+		`${TOKEN_VERSION_CACHE_PREFIX}${userId}`,
+		ttlSeconds,
+		String(version),
+	);
+}
+
+/**
  * Create an Elysia plugin that adds JWT verification with tokenVersion checking.
  */
 export function authMiddleware(config: AuthMiddlewareConfig) {

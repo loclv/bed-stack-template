@@ -9,9 +9,11 @@ export {
 	type AuthMiddlewareConfig,
 	authMiddleware,
 	extractToken,
+	getCachedTokenVersion,
 	getTokenVersion,
 	invalidateTokenVersionCache,
 	type JwtPayload,
+	publishTokenVersion,
 } from "./auth-middleware";
 export {
 	type BaseServiceConfig,
@@ -21,6 +23,12 @@ export {
 	getRequiredEnv,
 	loadBaseConfig,
 } from "./config";
+export {
+	type CSRFOptions,
+	CSRFProtection,
+	type CSRFTokens,
+	createCsrfProtection,
+} from "./csrf";
 export { createDatabase, runSQL } from "./database";
 export {
 	type HealthDependency,

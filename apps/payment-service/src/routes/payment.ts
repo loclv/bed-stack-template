@@ -11,8 +11,10 @@
  */
 
 import {
+	createCsrfProtection,
 	createLogger,
 	createRateLimiter,
+	getCachedTokenVersion,
 	ResponseBuilder,
 } from "@bed-stack/be-core";
 import { Elysia, t } from "elysia";
@@ -41,6 +43,8 @@ export function paymentRoutes(
 		maxRequests: 15,
 	});
 
+	const csrfProtection = createCsrfProtection(config.jwtSecret);
+
 	// Helper to extract client IP
 	function getClientIP(request: Request): string {
 		if (config.trustProxy) {
@@ -57,7 +61,7 @@ export function paymentRoutes(
 			// Routes matching front-end call `/seats/:id/reserve`
 			.post(
 				"/seats/:id/reserve",
-				async ({ params, jwt, cookie, set, body, request }) => {
+				async ({ params, jwt, cookie, set, body, request, headers }) => {
 					// 1. Rate Limiting Check
 					const clientIP = getClientIP(request);
 					const rateCheck = await paymentLimiter.check(clientIP);
@@ -79,7 +83,25 @@ export function paymentRoutes(
 						return ResponseBuilder.unauthorized();
 					}
 
+					// CSRF: cookie-authenticated mutation requires the
+					// double-submit signature issued by the auth service.
+					const csrfHeader = (headers as Record<string, unknown>)[
+						csrfProtection.getHeaderName()
+					] as string | undefined;
+					const csrfCookie = (cookie as any)?.[csrfProtection.getCookieName()]
+						?.value as string | undefined;
+					if (
+						!(await csrfProtection.validateToken(
+							csrfHeader || "",
+							csrfCookie || "",
+						))
+					) {
+						set.status = 403;
+						return ResponseBuilder.forbidden("Invalid CSRF token");
+					}
+
 					let userId: number;
+					let tokenVersion: unknown;
 					try {
 						const payload = await jwt.verify(token);
 						if (!payload || typeof payload === "boolean") {
@@ -87,9 +109,19 @@ export function paymentRoutes(
 							return ResponseBuilder.unauthorized();
 						}
 						userId = payload.userId as number;
+						tokenVersion = payload.tokenVersion;
 					} catch {
 						set.status = 401;
 						return ResponseBuilder.unauthorized();
+					}
+
+					// Reject tokens revoked by logout-all (version published to Redis)
+					if (typeof tokenVersion === "number") {
+						const currentVersion = await getCachedTokenVersion(redis, userId);
+						if (currentVersion !== null && currentVersion !== tokenVersion) {
+							set.status = 401;
+							return ResponseBuilder.unauthorized("Session has been revoked");
+						}
 					}
 
 					const seatId = Number(params.id);
