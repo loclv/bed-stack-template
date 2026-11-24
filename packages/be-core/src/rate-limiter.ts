@@ -35,38 +35,39 @@ export class RedisRateLimiter {
 	) {}
 
 	/**
+	 * Atomically increment the counter, set the window expiry on first hit,
+	 * and read the remaining TTL — all in one Lua script so a crash or
+	 * concurrent request can't leave a key without an expiry (which would
+	 * rate-limit that identifier forever).
+	 */
+	private static readonly CHECK_SCRIPT = `
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+  redis.call('PEXPIRE', KEYS[1], ARGV[1])
+end
+local ttl = redis.call('PTTL', KEYS[1])
+return {count, ttl}
+`;
+
+	/**
 	 * Check if a request from the given identifier is allowed.
-	 * Uses Redis INCR + EXPIRE for atomic sliding window.
+	 * Uses a Lua script for an atomic fixed-window counter.
 	 */
 	async check(identifier: string): Promise<RateLimitResult> {
 		const key = `ratelimit:${this.prefix}:${identifier}`;
 		const now = Date.now();
+		const windowMs = this.config.windowSeconds * 1000;
 
 		try {
-			const pipeline = this.redis.pipeline();
-			pipeline.incr(key);
-			pipeline.pttl(key);
-			const results = await pipeline.exec();
+			const results = (await this.redis.eval(
+				RedisRateLimiter.CHECK_SCRIPT,
+				1,
+				key,
+				windowMs,
+			)) as [number, number];
 
-			if (!results) {
-				// Redis unavailable — fail open
-				// TODO(prod): Monitor fail-open rate, alert if Redis down
-				logger.warn("Rate limiter fail-open: Redis unavailable");
-				return {
-					allowed: true,
-					remaining: this.config.maxRequests,
-					resetTime: new Date(now + this.config.windowSeconds * 1000),
-					totalHits: 0,
-				};
-			}
-
-			const count = (results[0]?.[1] as number) || 0;
-			const ttl = (results[1]?.[1] as number) || -1;
-
-			// Set expiry on first request in window
-			if (ttl === -1 || count === 1) {
-				await this.redis.pexpire(key, this.config.windowSeconds * 1000);
-			}
+			const count = results[0] || 0;
+			const ttl = results[1] || -1;
 
 			const resetTime = new Date(
 				now + (ttl > 0 ? ttl : this.config.windowSeconds * 1000),

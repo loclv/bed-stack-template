@@ -101,15 +101,44 @@ export class WebhookInboxWorker {
 					const stripeEventId = entry.stripe_event_id;
 					const eventType = entry.event_type;
 
-					const stripeObject = event.data.object;
+					// Ignore event types we don't handle (Stripe sends many) —
+					// acknowledge them so they don't retry into DEAD.
+					if (
+						eventType !== "payment_intent.succeeded" &&
+						eventType !== "payment_intent.payment_failed"
+					) {
+						await client.query(
+							`UPDATE webhook_inbox
+							 SET status = 'DONE', processed_at = NOW()
+							 WHERE id = $1`,
+							[entry.id],
+						);
+						continue;
+					}
+
+					const stripeObject = event?.data?.object;
+					const metadata = stripeObject?.metadata;
+					if (
+						!stripeObject ||
+						typeof stripeObject.id !== "string" ||
+						typeof stripeObject.amount !== "number" ||
+						!metadata ||
+						typeof metadata.seatId !== "string" ||
+						typeof metadata.userId !== "string"
+					) {
+						throw new Error(
+							`Malformed webhook payload for event ${stripeEventId}`,
+						);
+					}
+
 					const paymentIntentId = stripeObject.id;
 					const amountInCents = stripeObject.amount;
-					const seatId = Number(stripeObject.metadata.seatId);
-					const userId = Number(stripeObject.metadata.userId);
+					const seatId = Number(metadata.seatId);
+					const userId = Number(metadata.userId);
 
 					if (Number.isNaN(seatId) || Number.isNaN(userId)) {
 						throw new Error(
-							`Invalid metadata in webhook: seatId=${stripeObject.metadata.seatId}, userId=${stripeObject.metadata.userId}`,
+							`Invalid metadata in webhook: seatId=${metadata.seatId}, userId=${metadata.userId}`,
 						);
 					}
 
