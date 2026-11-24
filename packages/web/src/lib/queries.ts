@@ -1,8 +1,5 @@
 import { api, handleApiResponse } from "./api";
-import type { components, operations } from "./api-types";
-
-type Seat = components["schemas"]["Seat"];
-type User = components["schemas"]["User"];
+import type { operations } from "./api-types";
 
 export async function getRootData() {
 	const response = await api.GET("/");
@@ -36,11 +33,17 @@ export async function getCurrentUser() {
 	return handleApiResponse(response);
 }
 
-export async function updateCurrentUser(body: {
-	name?: string;
-	picture?: string;
-}) {
-	const response = await api.PATCH("/users/me", { body });
+export async function updateCurrentUser(
+	body: {
+		name?: string;
+		picture?: string;
+	},
+	csrfToken?: string,
+) {
+	const response = await api.PATCH("/users/me", {
+		body,
+		headers: csrfToken ? { "x-csrf-token": csrfToken } : undefined,
+	});
 	return handleApiResponse(response);
 }
 

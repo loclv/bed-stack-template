@@ -46,10 +46,8 @@ const app = new Elysia({
 			alg: "HS256",
 		}),
 	)
-	.use(authPlugin)
-	.use(usersPlugin)
-	.use(seatsPlugin)
-
+	// NOTE: Elysia hooks are positional — they only apply to routes registered
+	// after them. All global hooks MUST be registered before .use(plugin) calls.
 	.derive(({ request }) => {
 		// Extract client IP — only trust proxy headers when TRUST_PROXY=true
 		let clientIP = "127.0.0.1";
@@ -69,10 +67,10 @@ const app = new Elysia({
 			clientIP,
 		};
 	})
-	.onBeforeHandle(({ rateLimitResult, set }) => {
+	.onBeforeHandle(({ rateLimitResult, clientIP, set }) => {
 		if (!rateLimitResult.allowed) {
 			logger.warn("Rate limit exceeded", {
-				clientIP: rateLimitResult,
+				clientIP,
 				totalHits: rateLimitResult.totalHits,
 				resetTime: rateLimitResult.resetTime,
 			});
@@ -95,15 +93,18 @@ const app = new Elysia({
 		set.headers["Permissions-Policy"] =
 			"camera=(), microphone=(), geolocation=(), interest-cohort=()";
 	})
+	.onError(({ error, code }) => {
+		logger.error("Unhandled error", { error: error as Error, code });
+		return ResponseBuilder.internal("An unexpected error occurred");
+	})
+	.use(authPlugin)
+	.use(usersPlugin)
+	.use(seatsPlugin)
 	.get("/", () => {
 		return ResponseBuilder.success({
 			message: "Seat Reservation API",
 			version: "1.0.0",
 		});
-	})
-	.onError(({ error, code }) => {
-		logger.error("Unhandled error", { error: error as Error, code });
-		return ResponseBuilder.internal("An unexpected error occurred");
 	})
 	.listen(config.apiPort);
 

@@ -101,7 +101,6 @@ export class KafkaConsumer {
 	/** Connect the consumer. */
 	async connect(): Promise<void> {
 		await this.consumer.connect();
-		this.connected = true;
 		logger.info("Kafka consumer connected");
 	}
 
@@ -136,7 +135,6 @@ export class KafkaConsumer {
 	/** Disconnect the consumer. */
 	async disconnect(): Promise<void> {
 		await this.consumer.disconnect();
-		this.connected = false;
 		logger.info("Kafka consumer disconnected");
 	}
 }

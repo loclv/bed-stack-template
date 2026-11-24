@@ -50,12 +50,14 @@ async function issueRefreshToken(
 	return { raw, maxAge: REFRESH_TOKEN_EXPIRATION };
 }
 
-function setRefreshCookie(
-	cookie: Record<string, any>,
-	raw: string,
-	maxAge: number,
-) {
-	cookie[REFRESH_COOKIE_NAME].set({
+interface CookieSetter {
+	set: (opts: Record<string, unknown>) => void;
+}
+
+type CookieJar = Record<string, CookieSetter | undefined>;
+
+function setRefreshCookie(cookie: CookieJar, raw: string, maxAge: number) {
+	cookie[REFRESH_COOKIE_NAME]?.set({
 		value: raw,
 		httpOnly: true,
 		secure: config.nodeEnv === "production",
@@ -65,8 +67,8 @@ function setRefreshCookie(
 	});
 }
 
-function clearRefreshCookie(cookie: Record<string, any>) {
-	cookie[REFRESH_COOKIE_NAME].set({
+function clearRefreshCookie(cookie: CookieJar) {
+	cookie[REFRESH_COOKIE_NAME]?.set({
 		value: "",
 		httpOnly: true,
 		path: "/",
@@ -344,7 +346,7 @@ export const authPlugin = (app: Elysia) =>
 				}),
 			},
 		)
-		.post("/auth/refresh", async ({ cookie, jwt, set, headers, request }) => {
+		.post("/auth/refresh", async ({ cookie, jwt, set, headers }) => {
 			// CSRF validation for refresh endpoint
 			const csrfHeader = headers[csrfProtection.getHeaderName()] as
 				| string
@@ -390,11 +392,6 @@ export const authPlugin = (app: Elysia) =>
 					);
 				}
 
-				// Rotate: delete old token, issue new one
-				await dbWrapper.delete(
-					db.delete(refreshTokens).where(eq(refreshTokens.id, stored.id)),
-				);
-
 				const refreshUser = await dbWrapper.selectOne<{
 					id: number;
 					email: string;
@@ -411,13 +408,36 @@ export const authPlugin = (app: Elysia) =>
 					return ResponseBuilder.unauthorized("User not found");
 				}
 
+				// Rotate atomically: delete old token and insert the new one in a
+				// single transaction so a failure can't strand the user logged out.
+				const refresh = await dbWrapper.transaction(async (tx) => {
+					const txWrapper = new DatabaseWrapper(tx);
+					// biome-ignore lint/suspicious/noExplicitAny: drizzle transaction handle
+					const txDb = tx as any;
+					await txWrapper.delete(
+						txDb.delete(refreshTokens).where(eq(refreshTokens.id, stored.id)),
+					);
+
+					const raw = crypto.randomUUID();
+					const tokenHash = await hashToken(raw);
+					const expiresAt = new Date(
+						Date.now() + REFRESH_TOKEN_EXPIRATION * 1000,
+					);
+					await txWrapper.insert(
+						txDb.insert(refreshTokens).values({
+							userId: refreshUser.id,
+							tokenHash,
+							expiresAt,
+						}),
+					);
+					return { raw, maxAge: REFRESH_TOKEN_EXPIRATION };
+				});
+
 				const newToken = await jwt.sign({
 					id: refreshUser.id,
 					email: refreshUser.email,
 					exp: Math.floor(Date.now() / 1000) + JWT_EXPIRATION,
 				});
-
-				const refresh = await issueRefreshToken(refreshUser.id);
 
 				cookie.token.set({
 					value: newToken,

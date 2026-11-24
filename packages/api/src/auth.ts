@@ -42,8 +42,13 @@ export async function verifyGoogleToken(
 		const { tokens } = await oauth2Client.getToken(code);
 		oauth2Client.setCredentials(tokens);
 
+		if (!tokens.id_token) {
+			logger.warn("Google token response missing id_token");
+			return null;
+		}
+
 		const ticket = await oauth2Client.verifyIdToken({
-			idToken: tokens.id_token!,
+			idToken: tokens.id_token,
 			audience: config.googleClientId,
 		});
 
@@ -128,14 +133,35 @@ export async function findOrCreateUser(googleUser: GoogleUserInfo) {
 		}
 
 		// Create new user
-		const newUser = (await dbWrapper.insert(
-			db.insert(users).values({
-				googleId: googleUser.sub,
-				email: googleUser.email,
-				name: googleUser.name || null,
-				picture: googleUser.picture || null,
-			}),
-		)) as { id: number; email: string };
+		let newUser: { id: number; email: string };
+		try {
+			newUser = (await dbWrapper.insert(
+				db.insert(users).values({
+					googleId: googleUser.sub,
+					email: googleUser.email,
+					name: googleUser.name || null,
+					picture: googleUser.picture || null,
+				}),
+			)) as { id: number; email: string };
+		} catch (insertError) {
+			// Concurrent first-login race: another request may have already
+			// created this user between our SELECT and INSERT.
+			const racedUser = await dbWrapper.selectOne<{
+				id: number;
+				email: string;
+				name: string | null;
+				picture: string | null;
+			}>(db.select().from(users).where(eq(users.googleId, googleUser.sub)));
+
+			if (racedUser) {
+				logger.info("User created concurrently, using existing record", {
+					userId: racedUser.id,
+					email: racedUser.email,
+				});
+				return racedUser;
+			}
+			throw insertError;
+		}
 
 		logger.info("User created successfully", {
 			userId: newUser.id,

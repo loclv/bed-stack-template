@@ -45,6 +45,8 @@ export interface RefreshTokenRow {
 	is_revoked: boolean;
 	expires_at: Date;
 	created_at: Date;
+	/** created_at of the successor token — i.e. when this token was rotated/revoked. */
+	revoked_at?: Date | null;
 }
 
 export interface IssuedToken {
@@ -99,8 +101,11 @@ export async function rotateRefreshToken(
 	const tokenHash = await hashToken(rawToken);
 
 	const result = await pool.query<RefreshTokenRow>(
-		`SELECT id, user_id, family_id, is_revoked, expires_at, rotated_to, created_at
-		 FROM refresh_tokens WHERE token_hash = $1`,
+		`SELECT rt.id, rt.user_id, rt.family_id, rt.is_revoked, rt.expires_at,
+		        rt.rotated_to, rt.created_at, succ.created_at AS revoked_at
+		 FROM refresh_tokens rt
+		 LEFT JOIN refresh_tokens succ ON succ.id = rt.rotated_to
+		 WHERE rt.token_hash = $1`,
 		[tokenHash],
 	);
 
@@ -112,8 +117,11 @@ export async function rotateRefreshToken(
 
 	// Check if token was revoked (potential reuse attack)
 	if (stored.is_revoked) {
-		// Grace window check: if revoked recently, it might be a network retry
-		const revokedAgo = Date.now() - new Date(stored.created_at).getTime();
+		// Grace window check: if revoked recently, it might be a network retry.
+		// revoked_at is the successor token's created_at (when rotation happened);
+		// fall back to created_at for legacy rows without a successor.
+		const revokedAt = stored.revoked_at ?? stored.created_at;
+		const revokedAgo = Date.now() - new Date(revokedAt).getTime();
 		const gracePeriodMs = RT_GRACE_WINDOW_SECONDS * 1000;
 
 		if (stored.rotated_to && revokedAgo < gracePeriodMs) {
@@ -218,6 +226,27 @@ export async function revokeAllRefreshTokensForUser(
 		[userId],
 	);
 	logger.info("All refresh tokens revoked for user", { userId });
+}
+
+/**
+ * Revoke the token family containing the given raw refresh token.
+ * Used for single-session logout: each login starts a new family, so
+ * revoking the family ends only that session's refresh-token chain.
+ * Returns false if the token is unknown.
+ */
+export async function revokeTokenFamilyByRawToken(
+	pool: pg.Pool,
+	rawToken: string,
+): Promise<boolean> {
+	const tokenHash = await hashToken(rawToken);
+	const result = await pool.query<{ family_id: string }>(
+		`SELECT family_id FROM refresh_tokens WHERE token_hash = $1`,
+		[tokenHash],
+	);
+	const familyId = result.rows[0]?.family_id;
+	if (!familyId) return false;
+	await revokeTokenFamily(pool, familyId);
+	return true;
 }
 
 /**

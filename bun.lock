@@ -108,9 +108,6 @@
     },
     "packages/contracts": {
       "name": "@bed-stack/contracts",
-      "devDependencies": {
-        "@bed-stack/api": "workspace:*",
-      },
     },
     "packages/script": {
       "name": "script",

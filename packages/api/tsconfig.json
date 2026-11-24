@@ -3,7 +3,11 @@
 	"compilerOptions": {
 		"composite": true,
 		"tsBuildInfoFile": ".tsbuildinfo",
-		"skipLibCheck": true // Skip type checking of declaration files to speed up compilation
+		"skipLibCheck": true, // Skip type checking of declaration files to speed up compilation
+		"declaration": true,
+		"emitDeclarationOnly": true,
+		"declarationDir": "./dist",
+		"noEmit": false
 	},
 	"include": ["src"],
 	"exclude": ["node_modules"]

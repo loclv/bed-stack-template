@@ -229,7 +229,7 @@ export function paymentRoutes(
 					return ResponseBuilder.unauthorized("Invalid webhook signature");
 				}
 
-				// 2. Parse event payload
+				// 2. Parse event payload and validate shape
 				let event: { id: string; type: string };
 				try {
 					event = JSON.parse(rawBody);
@@ -239,6 +239,21 @@ export function paymentRoutes(
 					});
 					set.status = 400;
 					return ResponseBuilder.validation("Invalid JSON payload");
+				}
+
+				if (
+					typeof event !== "object" ||
+					event === null ||
+					typeof event.id !== "string" ||
+					event.id.length === 0 ||
+					typeof event.type !== "string" ||
+					event.type.length === 0
+				) {
+					logger.warn("Webhook payload missing id/type fields");
+					set.status = 400;
+					return ResponseBuilder.validation(
+						"Webhook payload must contain string 'id' and 'type'",
+					);
 				}
 
 				const stripeEventId = event.id;

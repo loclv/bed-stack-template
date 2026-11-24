@@ -120,14 +120,35 @@ async function handlePaymentCompleted(
 	client: pg.PoolClient,
 	payload: PaymentCompletedPayload,
 ): Promise<void> {
-	// Reserve the seat
-	await client.query(
+	// Idempotency: payment_intent_id is UNIQUE — skip if already reserved
+	const existing = await client.query(
+		`SELECT id FROM reservations WHERE payment_intent_id = $1`,
+		[payload.paymentIntentId],
+	);
+	if (existing.rows.length > 0) {
+		logger.info("Reservation already exists for payment intent, skipping", {
+			paymentIntentId: payload.paymentIntentId,
+		});
+		return;
+	}
+
+	// Reserve the seat — only succeeds if still held by this user
+	const updateResult = await client.query(
 		`UPDATE seats
 		 SET status = 'reserved', reserved_by = $1, reserved_at = NOW(),
 		     held_by = NULL, held_at = NULL, held_until = NULL
 		 WHERE id = $2 AND status = 'held' AND held_by = $1`,
 		[payload.userId, payload.seatId],
 	);
+
+	if (updateResult.rowCount === 0) {
+		// Seat was released (hold expired) or taken by someone else between
+		// payment and event delivery. Throw so the transaction rolls back and
+		// Kafka redelivers; ops can reconcile manually if it never succeeds.
+		throw new Error(
+			`Seat ${payload.seatId} not in held state for user ${payload.userId} (payment ${payload.paymentIntentId})`,
+		);
+	}
 
 	// Create reservation record
 	await client.query(

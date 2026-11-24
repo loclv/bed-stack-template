@@ -28,7 +28,7 @@ import createClient from "openapi-fetch";
 import type { paths } from "./api-types";
 
 // Get API base URL from environment or default to localhost
-const apiUrl = import.meta.env.PUBLIC_API_URL || "http://localhost:3000";
+export const apiUrl = import.meta.env.PUBLIC_API_URL || "http://localhost:3000";
 
 /**
  * Type-safe API client instance using openapi-fetch

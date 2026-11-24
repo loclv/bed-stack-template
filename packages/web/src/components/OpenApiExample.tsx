@@ -4,15 +4,11 @@
  */
 
 import { useEffect, useState } from "react";
-import { api } from "../lib/api";
-import { getCurrentAuthUser, googleLogin, logout } from "../lib/queries";
+import { api, apiUrl } from "../lib/api";
+import type { components } from "../lib/api-types";
+import { getAuthStatus, logout, updateCurrentUser } from "../lib/queries";
 
-interface User {
-	id: number;
-	email: string;
-	name: string | null;
-	picture?: string;
-}
+type User = components["schemas"]["User"];
 
 const VALID_PICTURE_ORIGINS = [
 	"https://lh3.googleusercontent.com",
@@ -33,6 +29,7 @@ function isValidPictureUrl(url: string): boolean {
 
 export function OpenApiExample() {
 	const [user, setUser] = useState<User | null>(null);
+	const [csrfToken, setCsrfToken] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 
@@ -40,9 +37,10 @@ export function OpenApiExample() {
 	useEffect(() => {
 		async function checkAuth() {
 			try {
-				const authData = await getCurrentAuthUser();
-				if (authData.authenticated && authData.user) {
-					setUser(authData.user);
+				const authData = await getAuthStatus();
+				if (authData.data?.authenticated && authData.data.user) {
+					setUser(authData.data.user);
+					setCsrfToken(authData.data.csrfToken ?? null);
 				}
 			} catch (err) {
 				setError(err instanceof Error ? err.message : "Failed to check auth");
@@ -54,16 +52,9 @@ export function OpenApiExample() {
 		checkAuth();
 	}, []);
 
-	// Example: Login with Google
-	const handleLogin = async () => {
-		try {
-			const authUrlData = await googleLogin();
-			if (authUrlData.authUrl) {
-				window.location.href = authUrlData.authUrl;
-			}
-		} catch (err) {
-			setError(err instanceof Error ? err.message : "Failed to login");
-		}
+	// Example: Login with Google — /auth/google responds with a 302 redirect
+	const handleLogin = () => {
+		window.location.href = `${apiUrl}/auth/google`;
 	};
 
 	// Example: Logout
@@ -76,17 +67,14 @@ export function OpenApiExample() {
 		}
 	};
 
-	// Example: Update user profile
+	// Example: Update user profile (requires the CSRF token from /auth/me)
 	const handleUpdateProfile = async (name: string) => {
 		try {
-			if (!user) return;
+			if (!user || !csrfToken) return;
 
-			const response = await api.PATCH("/users/me", {
-				body: { name },
-			});
-
-			if (response.data) {
-				setUser(response.data);
+			const response = await updateCurrentUser({ name }, csrfToken);
+			if (response.data?.user) {
+				setUser(response.data.user);
 			}
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Failed to update profile");

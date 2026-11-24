@@ -2,12 +2,14 @@
 	"extends": "../../tsconfig.base.json",
 	"compilerOptions": {
 		"composite": true,
+		"outDir": "./dist",
+		"rootDir": "./src",
 		"tsBuildInfoFile": ".tsbuildinfo",
 		"exactOptionalPropertyTypes": true,
 		"declaration": true,
-		"emitDeclarationOnly": true
+		"emitDeclarationOnly": true,
+		"noEmit": false
 	},
 	"include": ["src"],
-	"exclude": ["node_modules"],
-	"references": [{ "path": "../api" }]
+	"exclude": ["node_modules"]
 }

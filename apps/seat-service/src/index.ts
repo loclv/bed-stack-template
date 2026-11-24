@@ -104,11 +104,13 @@ const app = new Elysia({ maxBodySize: 1024 * 1024 })
 		set.headers["X-Frame-Options"] = "DENY";
 		set.headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
 	})
-	.use(seatRoutes(pool, redis, config, metricsRegistry))
+	// NOTE: Elysia hooks are positional — onError must be registered before
+	// route plugins to apply to them.
 	.onError(({ error, code }) => {
 		logger.error("Unhandled error", { error: error as Error, code });
 		return ResponseBuilder.internal("An unexpected error occurred");
 	})
+	.use(seatRoutes(pool, redis, config, metricsRegistry))
 	.listen(config.seatPort);
 
 logger.info(`Seat service running on port ${config.seatPort}`, {

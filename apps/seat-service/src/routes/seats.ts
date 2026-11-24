@@ -147,21 +147,25 @@ export function seatRoutes(
 			if (seat.status === "held" && seat.held_by !== userId) {
 				await client.query("ROLLBACK");
 				set.status = 409;
-				set.headers["Retry-After"] = String(
-					Math.ceil(
-						(new Date(seat.held_until!).getTime() - Date.now()) / 1000,
-					),
-				);
+				const retryAfterSeconds = seat.held_until
+					? Math.max(
+							0,
+							Math.ceil(
+								(new Date(seat.held_until).getTime() - Date.now()) / 1000,
+							),
+						)
+					: config.holdTtlSeconds;
+				set.headers["Retry-After"] = String(retryAfterSeconds);
 				hotSeatCounter.inc();
 				return ResponseBuilder.conflict("Seat is held by another user");
 			}
 
 			if (seat.status === "held" && seat.held_by === userId) {
 				// Extend hold
-				await client.query(
-					`UPDATE seats SET held_until = $1 WHERE id = $2`,
-					[holdUntil, seatId],
-				);
+				await client.query(`UPDATE seats SET held_until = $1 WHERE id = $2`, [
+					holdUntil,
+					seatId,
+				]);
 				await client.query("COMMIT");
 				return ResponseBuilder.success({
 					message: "Hold extended",
@@ -383,32 +387,58 @@ export function seatRoutes(
 				set.headers.Connection = "keep-alive";
 
 				const encoder = new TextEncoder();
+				let subscriber: Redis | null = null;
+				let heartbeat: ReturnType<typeof setInterval> | null = null;
+
+				const cleanup = () => {
+					if (heartbeat) {
+						clearInterval(heartbeat);
+						heartbeat = null;
+					}
+					if (subscriber) {
+						subscriber.unsubscribe();
+						subscriber.quit();
+						subscriber = null;
+					}
+				};
+
 				const stream = new ReadableStream({
 					start(controller) {
-						const subscriber = redis.duplicate();
+						let closed = false;
+						const safeEnqueue = (chunk: string) => {
+							if (closed) return;
+							try {
+								controller.enqueue(encoder.encode(chunk));
+							} catch {
+								closed = true;
+							}
+						};
+
+						subscriber = redis.duplicate();
 
 						subscriber.subscribe("seat-updates", (err) => {
 							if (err) {
-								logger.error("SSE subscribe failed", { error: err as Error });
+								logger.error("SSE subscribe failed", {
+									error: err as Error,
+								});
+								closed = true;
 								controller.close();
 							}
 						});
 
 						subscriber.on("message", (_channel: string, message: string) => {
-							controller.enqueue(encoder.encode(`data: ${message}\n\n`));
+							safeEnqueue(`data: ${message}\n\n`);
 						});
 
 						// Heartbeat every 30s to keep connection alive
-						const heartbeat = setInterval(() => {
-							controller.enqueue(encoder.encode(": heartbeat\n\n"));
+						heartbeat = setInterval(() => {
+							safeEnqueue(": heartbeat\n\n");
 						}, 30_000);
-
-						// Cleanup on close
-						return () => {
-							clearInterval(heartbeat);
-							subscriber.unsubscribe();
-							subscriber.quit();
-						};
+					},
+					// Called when the client disconnects — releases the Redis
+					// subscriber connection and stops the heartbeat interval.
+					cancel() {
+						cleanup();
 					},
 				});
 

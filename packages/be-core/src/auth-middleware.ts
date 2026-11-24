@@ -24,6 +24,12 @@ export interface AuthMiddlewareConfig {
 	redis: Redis;
 	/** TTL for tokenVersion cache in seconds. Default: 60 */
 	tokenVersionCacheTtlSeconds?: number;
+	/**
+	 * Optional lookup that returns the user's current tokenVersion (e.g. from DB).
+	 * When provided, tokens whose tokenVersion claim doesn't match are rejected,
+	 * enabling instant revocation on logout-all / password change.
+	 */
+	tokenVersionLookup?: (userId: number) => Promise<number>;
 }
 
 const TOKEN_VERSION_CACHE_PREFIX = "tv:";
@@ -90,7 +96,7 @@ export function authMiddleware(config: AuthMiddlewareConfig) {
 		.derive(async ({ jwt: jwtPlugin, headers, cookie, set }) => {
 			const token = extractToken(
 				headers.authorization as string | undefined,
-				cookie?.token?.value,
+				cookie?.token?.value as string | undefined,
 			);
 
 			if (!token) {
@@ -108,6 +114,20 @@ export function authMiddleware(config: AuthMiddlewareConfig) {
 					email: payload.email as string,
 					tokenVersion: payload.tokenVersion as number,
 				};
+
+				// If a tokenVersion lookup is configured, reject stale tokens
+				// (e.g. after logout-all bumped the user's token_version).
+				if (config.tokenVersionLookup) {
+					const currentVersion = await getTokenVersion(
+						config.redis,
+						auth.userId,
+						config.tokenVersionLookup,
+						config.tokenVersionCacheTtlSeconds,
+					);
+					if (auth.tokenVersion !== currentVersion) {
+						return { auth: null as JwtPayload | null };
+					}
+				}
 
 				return { auth };
 			} catch {

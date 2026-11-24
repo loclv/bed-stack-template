@@ -23,6 +23,7 @@ import { dummyHash, hashPassword, verifyPassword } from "../services/password";
 import {
 	issueNewRefreshToken,
 	revokeAllRefreshTokensForUser,
+	revokeTokenFamilyByRawToken,
 	rotateRefreshToken,
 } from "../services/token";
 
@@ -408,31 +409,25 @@ export function authRoutes(
 				return ResponseBuilder.success({ authenticated: true });
 			})
 
-			// ─── Logout (current session) ─────────────────────────────────────
-			.post("/logout", async ({ cookie, jwt, set, request }) => {
+			// ─── Logout (current session only) ────────────────────────────────
+			.post("/logout", async ({ cookie, set, request }) => {
 				const clientIP = getClientIP(request, config.trustProxy);
-				const token = cookie.token?.value;
+				const refreshRaw = cookie[REFRESH_COOKIE_NAME]?.value;
 
-				if (token) {
+				// Revoke only the family of the presented refresh token.
+				// Each login starts a new family, so this ends just this session.
+				// The short-lived access token expires on its own (AT TTL ~15min).
+				if (refreshRaw) {
 					try {
-						const payload = await jwt.verify(token);
-						if (payload && typeof payload !== "boolean") {
-							const userId = payload.userId as number;
-
-							// Bump tokenVersion to invalidate all ATs immediately
-							await pool.query(
-								"UPDATE users SET token_version = token_version + 1 WHERE id = $1",
-								[userId],
-							);
-							await invalidateTokenVersionCache(redis, userId);
-
-							// Revoke all refresh tokens
-							await revokeAllRefreshTokensForUser(pool, userId);
-							await auditLog(pool, userId, "logout", {}, clientIP);
-							logger.info("User logged out", { userId });
+						const revoked = await revokeTokenFamilyByRawToken(pool, refreshRaw);
+						if (revoked) {
+							await auditLog(pool, null, "logout", {}, clientIP);
+							logger.info("User logged out (session revoked)");
 						}
-					} catch {
-						// Token expired/invalid, still clear cookies
+					} catch (err) {
+						logger.error("Failed to revoke refresh token family", {
+							error: err as Error,
+						});
 					}
 				}
 

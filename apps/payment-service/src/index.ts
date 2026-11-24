@@ -105,7 +105,8 @@ const app = new Elysia({ maxBodySize: 1024 * 1024 })
 		set.headers["X-Frame-Options"] = "DENY";
 		set.headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
 	})
-	.use(paymentRoutes(pool, redis, config, paymentProvider))
+	// NOTE: Elysia hooks are positional — onError must be registered before
+	// route plugins to apply to them.
 	.onError(({ error, code }) => {
 		logger.error("Unhandled error in payment-service", {
 			error: error as Error,
@@ -115,6 +116,7 @@ const app = new Elysia({ maxBodySize: 1024 * 1024 })
 			"An unexpected error occurred in billing services",
 		);
 	})
+	.use(paymentRoutes(pool, redis, config, paymentProvider))
 	.listen(config.paymentPort);
 
 logger.info(`Payment service running on port ${config.paymentPort}`, {
