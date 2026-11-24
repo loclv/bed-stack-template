@@ -1,4 +1,4 @@
 [install]
 linker = "isolated"
-# 1 week in milliseconds
-# minimumReleaseAge = 604800000
+# Only install package versions published at least 3 days ago
+minimumReleaseAge = 259200
