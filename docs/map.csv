@@ -1,10 +1,12 @@
 name,description,path
-database,Schema,database.md
-deployment,Configuration,deployment.md
-development,Setup,development.md
-features,Seat Reservation Web Application — Specification,features.md
-openapi,OpenAPI Plugin,openapi.md
+code-review-2026-11-24,Critical fixes,code-review-2026-11-24.md
+database,Distributed Seat Reservation System — Database Specification,database.md
+deployment,Distributed Seat Reservation System — Deployment Guide,deployment.md
+development,Distributed Seat Reservation System — Developer Guide,development.md
+docker,Distributed Seat Reservation System — Docker & Compose Deployment,docker.md
+features,Distributed Seat Reservation System — Feature Specification,features.md
+openapi,Distributed Seat Reservation System — API Specification (OpenAPI 3.0),openapi.md
 security-review,Security Review — Seat Reservation,security-review.md
-system-flows,Seat Reservation System - UML Flow Diagrams,system-flows.md
-test-plan,Running Tests,test-plan.md
-validation,Validation,validation.md
+system-flows,Distributed Seat Reservation System — UML Flows & Architectures,system-flows.md
+test-plan,Distributed Seat Reservation System — Quality & Verification Test Plan,test-plan.md
+validation,Distributed Seat Reservation System — Input & Boundary Validation,validation.md
