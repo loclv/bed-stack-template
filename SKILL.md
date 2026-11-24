@@ -374,29 +374,6 @@ export const config = {
   databaseUrl: process.env.DATABASE_URL || "./database.db"
 };
 ```
-### Docker Deployment
-```dockerfile
-# Dockerfile
-FROM oven/bun:1.3.9-alpine
-
-WORKDIR /app
-
-# Install dependencies
-COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile --production
-
-# Copy source code
-COPY . .
-
-# Build application
-RUN bun run build
-
-# Expose port
-EXPOSE 3000
-
-# Start application
-CMD ["bun", "run", "start"]
-```
 ## Best Practices
 ### Code Organization
 1. Modular Routes: Keep routes in separate files with clear responsibilities

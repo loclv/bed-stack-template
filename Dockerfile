@@ -43,7 +43,7 @@ RUN cd packages/api && bun build --compile --production --outfile dist/server sr
 # ==============================================================================
 # 4. Production API Runner
 # ==============================================================================
-FROM oven/bun:1.3.14-slim AS api
+FROM oven/bun:1.4.4-slim AS api
 WORKDIR /app
 
 # Set default production environment variables

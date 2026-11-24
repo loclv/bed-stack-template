@@ -1,4 +1,4 @@
-FROM oven/bun:1.3.14 AS base
+FROM oven/bun:1.4.4 AS base
 WORKDIR /app
 
 # ── Install dependencies ──────────────────────────────────────────────
@@ -22,7 +22,7 @@ COPY packages/contracts/ ./packages/contracts/
 COPY apps/auth-service/ ./apps/auth-service/
 
 # ── Production runner ─────────────────────────────────────────────────
-FROM oven/bun:1.3.14-slim AS runner
+FROM oven/bun:1.4.4-slim AS runner
 WORKDIR /app
 
 # Non-root user for security
